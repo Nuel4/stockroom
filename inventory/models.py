@@ -74,6 +74,14 @@ class StockMovement(models.Model):
     location = models.ForeignKey(Location, on_delete=models.PROTECT, related_name="movements")
     movement_type = models.CharField(max_length=10, choices=Type.choices)
     quantity_delta = models.IntegerField()
+    receipt = models.ForeignKey(
+        "Receipt",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        editable=False,
+        related_name="movements",
+    )
     note = models.CharField(max_length=255, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -96,3 +104,29 @@ class StockMovement(models.Model):
 
     def __str__(self) -> str:
         return f"{self.movement_type} {self.quantity_delta} x {self.product_id}"
+
+
+class Receipt(models.Model):
+    """A delivery received in one go. Its lines are stock-in movements."""
+
+    supplier = models.ForeignKey(
+        Supplier, null=True, blank=True, on_delete=models.SET_NULL, related_name="receipts"
+    )
+    # For example the number on the supplier's delivery note.
+    reference = models.CharField(max_length=100, blank=True)
+    note = models.CharField(max_length=255, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        editable=False,
+        related_name="+",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return self.reference or f"Receipt {self.pk}"
