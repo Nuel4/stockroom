@@ -52,6 +52,7 @@ Every endpoint needs a token. Create one with `python manage.py drf_create_token
 | `/api/products/low-stock/` | Active products at or below their reorder level |
 | `/api/products/<id>/stock/` | Stock of one product per location |
 | `/api/movements/` | Record and list stock movements; filter by `?product=`, `?location=`, `?movement_type=` |
+| `/api/receipts/` | Receive a delivery with several lines in one request, all-or-nothing; filter by `?supplier=` |
 
 Example: receive 20 units, then check what is low.
 
@@ -62,6 +63,16 @@ curl -X POST http://localhost:8000/api/movements/ \
 ```
 
 `quantity_delta` is positive for `in`, negative for `out`, and either for `adjust`.
+
+To receive a whole delivery at once, send its lines to `/api/receipts/`. If any line is refused, nothing is recorded, and the error says which line failed:
+
+```bash
+curl -X POST http://localhost:8000/api/receipts/ \
+  -H "Authorization: Token <token>" -H "Content-Type: application/json" \
+  -d '{"reference": "DN-1001", "lines": [
+        {"product": 1, "location": 1, "quantity": 20},
+        {"product": 2, "location": 1, "quantity": 8}]}'
+```
 
 ## Tests
 

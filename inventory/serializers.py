@@ -1,7 +1,13 @@
 from rest_framework import serializers
 
-from .models import Category, Location, Product, StockMovement, Supplier
-from .services import MovementError, record_movement, stock_level, validate_delta
+from .models import Category, Location, Product, Receipt, StockMovement, Supplier
+from .services import (
+    MovementError,
+    receive_delivery,
+    record_movement,
+    stock_level,
+    validate_delta,
+)
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -61,10 +67,11 @@ class StockMovementSerializer(serializers.ModelSerializer):
             "movement_type",
             "quantity_delta",
             "note",
+            "receipt",
             "created_by",
             "created_at",
         ]
-        read_only_fields = ["id", "created_by", "created_at"]
+        read_only_fields = ["id", "receipt", "created_by", "created_at"]
 
     def validate(self, attrs: dict) -> dict:
         try:
@@ -77,5 +84,40 @@ class StockMovementSerializer(serializers.ModelSerializer):
         user = self.context["request"].user
         try:
             return record_movement(user=user, **validated_data)
+        except MovementError as exc:
+            raise serializers.ValidationError({"detail": str(exc)}) from exc
+
+
+class ReceiptLineSerializer(serializers.Serializer):
+    product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
+    location = serializers.PrimaryKeyRelatedField(queryset=Location.objects.all())
+    quantity = serializers.IntegerField(min_value=1)
+    note = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
+
+
+class ReceiptSerializer(serializers.ModelSerializer):
+    lines = ReceiptLineSerializer(many=True, write_only=True, allow_empty=False)
+    movements = StockMovementSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Receipt
+        fields = [
+            "id",
+            "supplier",
+            "reference",
+            "note",
+            "lines",
+            "movements",
+            "created_by",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_by", "created_at"]
+
+    def create(self, validated_data: dict) -> Receipt:
+        lines = validated_data.pop("lines")
+        try:
+            return receive_delivery(
+                lines=lines, user=self.context["request"].user, **validated_data
+            )
         except MovementError as exc:
             raise serializers.ValidationError({"detail": str(exc)}) from exc
