@@ -4,11 +4,12 @@ from rest_framework import mixins, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from .models import Category, Location, Product, StockMovement, Supplier
+from .models import Category, Location, Product, Receipt, StockMovement, Supplier
 from .serializers import (
     CategorySerializer,
     LocationSerializer,
     ProductSerializer,
+    ReceiptSerializer,
     StockMovementSerializer,
     SupplierSerializer,
 )
@@ -96,4 +97,19 @@ class StockMovementViewSet(
     queryset = StockMovement.objects.select_related("product", "location")
     serializer_class = StockMovementSerializer
     filterset_fields = ["product", "location", "movement_type"]
+    ordering_fields = ["created_at"]
+
+
+class ReceiptViewSet(
+    mixins.CreateModelMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    """A delivery with several lines, recorded all together or not at all."""
+
+    queryset = Receipt.objects.select_related("supplier").prefetch_related("movements")
+    serializer_class = ReceiptSerializer
+    filterset_fields = ["supplier"]
+    search_fields = ["reference"]
     ordering_fields = ["created_at"]

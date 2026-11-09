@@ -3,7 +3,7 @@
 from django.db import transaction
 from django.db.models import Sum
 
-from .models import Location, Product, StockMovement
+from .models import Location, Product, Receipt, StockMovement
 
 
 class MovementError(ValueError):
@@ -36,6 +36,7 @@ def record_movement(
     quantity_delta: int,
     note: str = "",
     user=None,
+    receipt: Receipt | None = None,
 ) -> StockMovement:
     """Record a movement, refusing anything that would make stock negative."""
     validate_delta(movement_type, quantity_delta)
@@ -55,4 +56,49 @@ def record_movement(
         quantity_delta=quantity_delta,
         note=note,
         created_by=user if getattr(user, "is_authenticated", False) else None,
+        receipt=receipt,
     )
+
+
+@transaction.atomic
+def receive_delivery(
+    *,
+    lines: list[dict],
+    supplier=None,
+    reference: str = "",
+    note: str = "",
+    user=None,
+) -> Receipt:
+    """Record a whole delivery, or nothing at all.
+
+    Each line becomes a stock-in movement linked to one receipt. If any line is
+    refused, every line is rolled back and the error names the line that failed.
+    """
+    if not lines:
+        raise MovementError("A delivery needs at least one line.")
+
+    # Lock every product up front, in a fixed order, so two deliveries that
+    # overlap cannot deadlock each other.
+    product_ids = sorted({line["product"].pk for line in lines})
+    list(Product.objects.select_for_update().filter(pk__in=product_ids).order_by("pk"))
+
+    receipt = Receipt.objects.create(
+        supplier=supplier,
+        reference=reference,
+        note=note,
+        created_by=user if getattr(user, "is_authenticated", False) else None,
+    )
+    for number, line in enumerate(lines, start=1):
+        try:
+            record_movement(
+                product=line["product"],
+                location=line["location"],
+                movement_type=StockMovement.Type.IN,
+                quantity_delta=line["quantity"],
+                note=line.get("note", ""),
+                user=user,
+                receipt=receipt,
+            )
+        except MovementError as exc:
+            raise MovementError(f"Line {number}: {exc}") from exc
+    return receipt
