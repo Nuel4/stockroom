@@ -20,7 +20,7 @@ Items are ticked only when they are merged and tested.
 - [ ] Tag `v0.1.0`
 
 ## v0.2: receiving, import and export
-- [ ] Receive a delivery in one request with several lines (all-or-nothing)
+- [x] Receive a delivery in one request with several lines (all-or-nothing)
 - [ ] Unit cost on stock-in and stock valuation
 - [ ] CSV import for products and opening stock, with row-level error reporting
 - [ ] CSV export for products and movements
